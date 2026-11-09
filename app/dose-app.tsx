@@ -234,13 +234,7 @@ export function DoseApp() {
       )}
 
       {error && <p className="error" role="alert">{error}</p>}
-      {snapshot?.source === "sheet" && snapshot.spreadsheetUrl && (
-        <p className="banner"><a href={snapshot.spreadsheetUrl}>Open the dose log copy</a></p>
-      )}
-      {snapshot?.source === "database" && (
-        <p className="banner">Saved with your sign-in. The dose log copy takes over once it is connected.</p>
-      )}
-      <p className="hint">To keep this on your phone, add it to your home screen.</p>
+      <p className="hint">Saved with your sign-in. Add this page to your home screen to keep it on your phone.</p>
     </main>
   );
 }
