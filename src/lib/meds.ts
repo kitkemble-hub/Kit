@@ -225,28 +225,27 @@ export function shiftDate(iso: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function chooseDose(rows: MedRow[], today: string, hour: number): { date: string; slot: Slot } | null {
-  const yesterday = shiftDate(today, -1);
-  const todayRow = rows.find((row) => row.date === today);
-  const yesterdayRow = rows.find((row) => row.date === yesterday);
-  if (hour < 4 && !todayRow?.morning && yesterdayRow && !yesterdayRow.night) {
-    return { date: yesterday, slot: "night" };
-  }
+export function chooseDose(rows: MedRow[], today: string): { date: string; slot: Slot } | null {
+  const started = rows
+    .filter((row) => row.date <= today && (row.morning || row.afternoon || row.night))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const last = started[started.length - 1];
+  if (!last) return { date: today, slot: "morning" };
   for (const slot of SLOTS) {
-    if (!todayRow?.[slot]) return { date: today, slot };
+    if (!last[slot]) return { date: last.date, slot };
   }
-  return null;
+  const nextDate = shiftDate(last.date, 1);
+  if (nextDate > today) return null;
+  return { date: nextDate, slot: "morning" };
 }
 
-export function doseChoices(rows: MedRow[], today: string, hour: number): { date: string; slot: Slot }[] {
-  const choices: { date: string; slot: Slot }[] = [];
-  const yesterday = shiftDate(today, -1);
-  const todayRow = rows.find((row) => row.date === today);
-  const yesterdayRow = rows.find((row) => row.date === yesterday);
-  if (hour < 4 || (yesterdayRow && !yesterdayRow.night && !todayRow?.morning)) {
-    choices.push({ date: yesterday, slot: "night" });
+export function doseChoices(rows: MedRow[], today: string): { date: string; slot: Slot }[] {
+  const next = chooseDose(rows, today);
+  const anchor = next?.date ?? today;
+  const choices = SLOTS.map((slot) => ({ date: anchor, slot }));
+  if (anchor !== today) {
+    for (const slot of SLOTS) choices.push({ date: today, slot });
   }
-  for (const slot of SLOTS) choices.push({ date: today, slot });
   return choices;
 }
 
@@ -321,7 +320,7 @@ export function assertLogDate(date: string, now = new Date()): string {
     throw new StoreError("That date isn't valid.");
   }
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  if (Math.abs(utc - today) > 2 * 86400000) throw new StoreError("That date is too far from today.");
+  if (Math.abs(utc - today) > 14 * 86400000) throw new StoreError("That date is too far from today.");
   return date;
 }
 

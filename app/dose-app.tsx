@@ -22,7 +22,8 @@ export function DoseApp() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const [selection, setSelection] = useState<Selection | null | undefined>(undefined);
+  const [manual, setManual] = useState<Selection | null>(null);
+  const [clock, setClock] = useState(() => new Date());
   const [doseText, setDoseText] = useState("0.5");
   const [dirty, setDirty] = useState(false);
   const [editingPills, setEditingPills] = useState(false);
@@ -42,33 +43,34 @@ export function DoseApp() {
   }, [load]);
 
   useEffect(() => {
-    if (!snapshot || selection !== undefined) return;
-    const parts = localParts();
-    setSelection(chooseDose(snapshot.rows, parts.date, parts.hour));
-  }, [snapshot, selection]);
+    const timer = setInterval(() => setClock(new Date()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const today = localParts(clock).date;
+  const nextSpace = snapshot ? chooseDose(snapshot.rows, today) : null;
+  const selection = manual ?? nextSpace;
+  const selectedDate = selection?.date ?? "";
+  const selectedSlot = selection?.slot;
 
   useEffect(() => {
-    if (!snapshot || !selection || dirty) return;
-    const row = snapshot.rows.find((item) => item.date === selection.date);
-    const amount = row?.[selection.slot] ? recordedDose(row, selection.slot) : snapshot.usual[selection.slot];
+    if (!snapshot || !selectedSlot || dirty) return;
+    const row = snapshot.rows.find((item) => item.date === selectedDate);
+    const amount = row?.[selectedSlot] ? recordedDose(row, selectedSlot) : snapshot.usual[selectedSlot];
     setDoseText(formatPills(amount));
-  }, [snapshot, selection, dirty]);
-
-  const parts = localParts();
-  const today = parts.date;
+  }, [snapshot, selectedDate, selectedSlot, dirty]);
   const latest = snapshot ? lastTaken(snapshot.rows) : null;
   const shown = snapshot ? visibleRows(snapshot.rows, today) : [];
 
   function select(next: Selection) {
     setDirty(false);
-    setSelection(next);
+    setManual(next);
     setError("");
   }
 
   function cycle() {
     if (!snapshot) return;
-    const now = localParts();
-    const choices = doseChoices(snapshot.rows, now.date, now.hour);
+    const choices = doseChoices(snapshot.rows, localParts().date);
     const index = choices.findIndex((choice) => choice.date === selection?.date && choice.slot === selection.slot);
     select(choices[(index + 1) % choices.length]);
   }
@@ -81,17 +83,24 @@ export function DoseApp() {
   }
 
   async function record() {
-    if (!selection) return;
+    const now = localParts();
+    const target = manual ?? (snapshot ? chooseDose(snapshot.rows, now.date) : null);
+    if (!target) return;
     const dose = Number(doseText);
     setPending(true);
     setError("");
     try {
-      const now = localParts();
-      const body = await post("/api/dose", { ...selection, dose, time: now.time, today: now.date });
+      const body = await post("/api/dose", {
+        ...target,
+        dose,
+        time: now.time,
+        today: now.date,
+        place: manual ? "chosen" : "next",
+      });
       setSnapshot(body);
       setDirty(false);
-      const fresh = localParts();
-      setSelection(chooseDose(body.rows, fresh.date, fresh.hour));
+      setManual(null);
+      setClock(new Date());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Couldn't save that.");
     } finally {
@@ -106,8 +115,8 @@ export function DoseApp() {
       const body = await post("/api/undo", { today: localParts().date });
       setSnapshot(body);
       setDirty(false);
-      const fresh = localParts();
-      setSelection(chooseDose(body.rows, fresh.date, fresh.hour));
+      setManual(null);
+      setClock(new Date());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Couldn't undo that.");
     } finally {
@@ -165,7 +174,9 @@ export function DoseApp() {
       {selection ? (
         <button type="button" className="dose-button" onClick={record} disabled={pending}>
           <span className="slot">{SLOT_LABEL[selection.slot]}</span>
-          <span className="slot-sub">{pending ? "Saving" : `Subtract ${doseLabel}`}</span>
+          <span className="slot-sub">
+            {pending ? "Saving" : selection.date === today ? `Subtract ${doseLabel}` : `For ${dayPhrase(selection.date, today)} · subtract ${doseLabel}`}
+          </span>
         </button>
       ) : (
         <div className="dose-button done" role="status">

@@ -75,9 +75,14 @@ test("the button advances through the day and remembers the latest slot", () => 
       nightExtra: 0,
     },
   ];
-  assert.deepEqual(chooseDose(rows, today, 15), { date: today, slot: "afternoon" });
-  assert.equal(chooseDose([{ ...rows[1], afternoon: "2:00 PM", night: "9:00 PM" }], today, 22), null);
-  assert.deepEqual(chooseDose([{ ...rows[0], night: "" }], today, 1), { date: "2026-11-08", slot: "night" });
+  assert.deepEqual(chooseDose(rows, today), { date: today, slot: "afternoon" });
+  assert.equal(chooseDose([{ ...rows[1], afternoon: "2:00 PM", night: "9:00 PM" }], today), null);
+  const nightStillOpen = [{ ...rows[0], night: "" }];
+  assert.deepEqual(chooseDose(nightStillOpen, today), { date: "2026-11-08", slot: "night" });
+  assert.deepEqual(chooseDose(nightStillOpen, "2026-11-10"), { date: "2026-11-08", slot: "night" });
+  assert.deepEqual(chooseDose([rows[0]], today), { date: today, slot: "morning" });
+  assert.deepEqual(chooseDose([rows[0]], "2026-11-10"), { date: "2026-11-09", slot: "morning" });
+  assert.deepEqual(chooseDose([], today), { date: today, slot: "morning" });
   assert.deepEqual(lastTaken(rows), { date: today, slot: "morning", time: "8:00 AM" });
   assert.equal(recordedDose(rows[1], "morning"), 0.5);
   assert.equal(visibleRows(rows, today).length, 2);

@@ -30,14 +30,16 @@ export async function postDose(request: Request): Promise<Response> {
   const body = await readBody(request);
   if (body instanceof Response) return body;
   try {
-    const record = body as { slot?: unknown; dose?: unknown; date?: unknown; time?: unknown; today?: unknown };
-    const date = assertLogDate(typeof record.date === "string" ? record.date : "");
-    const today = assertLogDate(typeof record.today === "string" ? record.today : date);
+    const record = body as { slot?: unknown; dose?: unknown; date?: unknown; time?: unknown; today?: unknown; place?: unknown };
+    const place = record.place === "chosen" ? "chosen" : "next";
+    const today = assertLogDate(typeof record.today === "string" ? record.today : typeof record.date === "string" ? record.date : "");
+    const date = place === "chosen" ? assertLogDate(typeof record.date === "string" ? record.date : "") : today;
     const snapshot = await recordDose(scope(viewer), stageOf(viewer), today, {
       slot: assertSlot(record.slot),
       dose: assertDose(record.dose),
       date,
       time: assertTime(record.time),
+      place,
     });
     return json(snapshot);
   } catch (error) {
